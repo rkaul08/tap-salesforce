@@ -267,9 +267,11 @@ def do_discover(sf: Salesforce, streams: list[str]):  # noqa: C901
                 mdata = metadata.write(mdata, ("properties", prop), "inclusion", "unsupported")
 
             if replication_key:
-                mdata = metadata.write(mdata, (), "valid-replication-keys", [replication_key])
-                mdata = metadata.write(mdata, (), "replication-key", replication_key)
-                mdata = metadata.write(mdata, (), "replication-method", "INCREMENTAL")
+                #mdata = metadata.write(mdata, (), "valid-replication-keys", [replication_key])
+                #mdata = metadata.write(mdata, (), "replication-key", replication_key)
+                #mdata = metadata.write(mdata, (), "replication-method", "INCREMENTAL")
+                mdata = metadata.write(mdata, (), "replication-method", "FULL_TABLE")
+                mdata = metadata.write(mdata, (), "selected", "true")
             else:
                 mdata = metadata.write(
                     mdata,
@@ -312,7 +314,15 @@ def do_discover(sf: Salesforce, streams: list[str]):  # noqa: C901
         entries = [e for e in entries if e["stream"] not in unsupported_tag_objects]
 
     result = {"streams": entries}
-    json.dump(result, sys.stdout, indent=4)
+    #json.dump(result, sys.stdout, indent=4)
+    try:
+        with open('catalog.json', 'w', encoding='utf-8') as f:
+            json.dump(result, f, indent=2)
+        LOGGER.info("Successfully wrote catalog to catalog.json")
+    except Exception as e:
+        LOGGER.error(f"Failed to write catalog file: {str(e)}")
+        raise
+    LOGGER.info("Finished discover")
 
 
 def is_object_type(property_schema):
@@ -527,6 +537,17 @@ def main_impl():
             catalog = args.properties or args.catalog.to_dict()
             state = build_state(args.state, catalog)
             do_sync(sf, catalog, state)
+        else:
+            do_discover(sf, CONFIG.get("streams_to_discover", []))
+            try:
+                with open('catalog.json', 'r', encoding='utf-8') as f:
+                    catalog = json.load(f)
+            except Exception as e:
+                LOGGER.error(f"Failed to read catalog file: {str(e)}")
+                raise
+            state = build_state(args.state, catalog)
+            do_sync(sf, catalog, state)
+
     finally:
         if sf:
             if sf.rest_requests_attempted > 0:
