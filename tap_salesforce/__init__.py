@@ -111,6 +111,23 @@ def build_state(raw_state, catalog):
 
     return state
 
+def field_to_property_schema(field, mdata):
+    """Convert Salesforce field to Singer schema property"""
+    field_name = field["name"]
+    field_type = field["type"]
+
+    # Convert number/currency fields to string
+    if field_type in ["number", "currency", "double", "percent"]:
+        property_schema = {
+            "type": ["null", "string"],
+            "description": f"Original Salesforce type: {field_type}"
+        }
+    else:
+        # Use original Singer tap logic for other types
+        property_schema = tap_salesforce.salesforce.field_to_property_schema(field, mdata)[0]
+
+    return property_schema, mdata
+
 
 # pylint: disable=undefined-variable
 def create_property_schema(field, mdata):
@@ -121,7 +138,7 @@ def create_property_schema(field, mdata):
     else:
         mdata = metadata.write(mdata, ("properties", field_name), "inclusion", "available")
 
-    property_schema, mdata = tap_salesforce.salesforce.field_to_property_schema(field, mdata)
+    property_schema, mdata = field_to_property_schema(field, mdata)
 
     return (property_schema, mdata)
 
